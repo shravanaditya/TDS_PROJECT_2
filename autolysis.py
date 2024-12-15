@@ -1,19 +1,3 @@
-
-# /// script
-# requires-python = ">=3.9"
-# dependencies = [
-#   "pandas",
-#   "seaborn",
-#   "matplotlib",
-#   "numpy",
-#   "scipy",
-#   "openai",
-#   "scikit-learn",
-#   "requests",
-#   "ipykernel",  # Added ipykernel
-# ]
-# ///
-
 import os
 import pandas as pd
 import numpy as np
@@ -191,130 +175,82 @@ def create_readme(summary_stats, missing_values, corr_matrix, outliers, output_d
         return None
 
 
-
-
 # Function to generate a detailed story using the new OpenAI API through the proxy
 def question_llm(prompt, context):
     print("Generating story using LLM...")  # Debugging line
     try:
         # Get the AIPROXY_TOKEN from the environment variable
-        token = os.environ["AIPROXY_TOKEN"]
+        token = "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIyZjMwMDA2OTVAZHMuc3R1ZHkuaWl0bS5hYy5pbiJ9.fu4ZEGsC9J_shc1Dcbo852AuE2JOBIAtfOuT8KAJXWw"  # API Token
 
         # Set the custom API base URL for the proxy
-        api_url = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+        api_url = "https://aiproxy.sanand.workers.dev/openai/"
 
         # Construct the full prompt
         full_prompt = f"""
-        Based on the following data analysis, please generate a creative and engaging story. The story should include multiple paragraphs, a clear structure with an introduction, body, and conclusion, and should feel like a well-rounded narrative.
-
-        Context:
-        {context}
-
-        Data Analysis Prompt:
-        {prompt}
-
-        The story should be elaborate and cover the following:
-        - An introduction to set the context.
-        - A detailed body that expands on the data points and explores their significance.
-        - A conclusion that wraps up the analysis and presents any potential outcomes or lessons.
-        - Use transitions to connect ideas and keep the narrative flowing smoothly.
-        - Format the story with clear paragraphs and structure.
+        Based on the following data analysis, please generate a creative and informative story:
+        Context: {context}
         """
 
-        # Prepare headers
         headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}"
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
         }
 
-        # Prepare the body with the model and prompt
+        # Set up the payload for the API call
         data = {
-            "model": "gpt-4o-mini",  # Specific model for proxy
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": full_prompt}
-            ],
-            "max_tokens": 1000,
-            "temperature": 0.7
+            "prompt": full_prompt,
+            "max_tokens": 300,
+            "temperature": 0.7,
         }
 
-        # Send the POST request to the proxy
-        response = requests.post(api_url, headers=headers, data=json.dumps(data))
+        # Make the request to the OpenAI API through the proxy
+        response = requests.post(api_url, headers=headers, json=data)
 
-        # Check for successful response
         if response.status_code == 200:
-            # Extract the story from the response
-            story = response.json()['choices'][0]['message']['content'].strip()
+            story = response.json().get('choices', [{}])[0].get('text', '')
             print("Story generated.")  # Debugging line
             return story
         else:
-            print(f"Error with request: {response.status_code} - {response.text}")
-            return "Failed to generate story."
-
+            print(f"Error: {response.status_code} - {response.text}")
+            return "Error generating story."
     except Exception as e:
-        print(f"Error: {e}")
-        return "Failed to generate story."
+        print(f"Error in generating story: {e}")
+        return "Error generating story."
 
 
+def main(input_file, output_dir):
+    print("Starting analysis...")  # Debugging line
+    # Load the dataset
+    df = pd.read_csv(input_file)
 
-# Main function that integrates all the steps
-def main(csv_file):
-    print("Starting the analysis...")  # Debugging line
-
-    # Set the API token as an environment variable
-  
-    # Try reading the CSV file with 'ISO-8859-1' encoding to handle special characters
-    try:
-        df = pd.read_csv(csv_file, encoding='ISO-8859-1')
-        print("Dataset loaded successfully!")  # Debugging line
-    except UnicodeDecodeError as e:
-        print(f"Error reading file: {e}")
-        return
-
+    # Analyze the dataset
     summary_stats, missing_values, corr_matrix = analyze_data(df)
 
-    # Debugging print
-    print("Summary Stats:")
-    print(summary_stats)
-
+    # Detect outliers
     outliers = detect_outliers(df)
 
-    # Debugging print
-    print("Outliers detected:")
-    print(outliers)
-
-    output_dir = "."
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Visualize the data and check output paths
+    # Generate visualizations
     heatmap_file, outliers_file, dist_plot_file = visualize_data(corr_matrix, outliers, df, output_dir)
 
-    print("Visualizations saved.")
-
-    # Generate the story using the LLM
-    story = question_llm("Generate a nice and creative story from the analysis", 
-                         context=f"Dataset Analysis:\nSummary Statistics:\n{summary_stats}\n\nMissing Values:\n{missing_values}\n\nCorrelation Matrix:\n{corr_matrix}\n\nOutliers:\n{outliers}")
-
-    # Create the README file with the analysis and the story
+    # Create the README report
     readme_file = create_readme(summary_stats, missing_values, corr_matrix, outliers, output_dir)
-    if readme_file:
-        try:
-            # Append the story to the README.md file
-            with open(readme_file, 'a') as f:
-                f.write("## Story\n")
-                f.write(f"{story}\n")
 
-            print(f"Analysis complete! Results saved in '{output_dir}' directory.")
-            print(f"README file: {readme_file}")
-            print(f"Visualizations: {heatmap_file}, {outliers_file}, {dist_plot_file}")
-        except Exception as e:
-            print(f"Error appending story to README.md: {e}")
-    else:
-        print("Error generating the README.md file.")
+    # Generate a story using the LLM
+    story = question_llm("Create a narrative from the analysis and visualization above", "Here is some analysis data...")  # Add the context to make it more informative
+
+    print("Analysis complete!")  # Debugging line
+    return readme_file, heatmap_file, outliers_file, dist_plot_file, story
+
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: uv run autolysis.py <dataset_path>")
-        sys.exit(1)
-    main(sys.argv[1])
+    parser = argparse.ArgumentParser(description='Automated Data Analysis')
+    parser.add_argument('input_file', type=str, help='Input CSV file')
+    parser.add_argument('output_dir', type=str, help='Output directory for results')
+    args = parser.parse_args()
+
+    # Make output directory if it doesn't exist
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
+    main(args.input_file, args.output_dir)
+
